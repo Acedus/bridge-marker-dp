@@ -238,6 +238,8 @@ func (dpi *BridgeDevicePlugin) GetPreferredAllocation(ctx context.Context, _ *pl
 	return res, nil
 }
 
+// TODO: Currently we create a new netlink watcher for every dpi,
+// This is redundant, a proper message queue solution should be examined.
 func (dpi *BridgeDevicePlugin) healthCheck() error {
 	logger := log.DefaultLogger()
 	// Open a netlink handle
