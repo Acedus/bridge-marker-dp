@@ -91,11 +91,6 @@ func GetBridgeDevicePlugins(maxDevices int) ([]Device, error) {
 	return ret, nil
 }
 
-type BridgeDeviceControllerInterface interface {
-	Initialized() bool
-	RefreshMediatedDeviceTypes()
-}
-
 type BridgeDeviceController struct {
 	permanentPlugins    map[string]Device
 	startedPlugins      map[string]controlledDevice
@@ -103,7 +98,6 @@ type BridgeDeviceController struct {
 	newPlugins	    chan Device
 	maxDevices	    int
 	backoff             []time.Duration
-	refreshInterval     time.Duration
 	stop                chan struct{}
 }
 
@@ -190,18 +184,6 @@ func (c *BridgeDeviceController) startNewPlugin(device Device) {
 	c.startedPluginsMutex.Lock()
 	defer c.startedPluginsMutex.Unlock()
 	c.startDevice(device.GetDeviceName(), device)
-}
-
-func (c *BridgeDeviceController) Initialized() bool {
-	c.startedPluginsMutex.Lock()
-	defer c.startedPluginsMutex.Unlock()
-	for _, dev := range c.startedPlugins {
-		if !dev.devicePlugin.GetInitialized() {
-			return false
-		}
-	}
-
-	return true
 }
 
 func (c *BridgeDeviceController) ScanForNewDevices(stop chan struct{}) {
