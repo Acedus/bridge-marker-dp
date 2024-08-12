@@ -1,17 +1,3 @@
-// Copyright 2019 Red Hat, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package main
 
 import (
@@ -19,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Acedus/bridge-marker-dp/internal/plugin"
+	"github.com/Acedus/bridge-marker-dp/pkg/plugin"
 	flag "github.com/spf13/pflag"
 	"kubevirt.io/client-go/log"
 )
@@ -34,9 +20,9 @@ var defaultBackoffTime = []time.Duration{1 * time.Second, 2 * time.Second, 5 * t
 
 type bridgeMarkerApp struct {
 	startedPluginMutex sync.Mutex
-	maxDevices          int
-	backoff             []time.Duration
-	stop                chan struct{}
+	maxDevices         int
+	backoff            []time.Duration
+	stop               chan struct{}
 }
 
 func (app *bridgeMarkerApp) InitFlags() {
@@ -51,22 +37,22 @@ func (app *bridgeMarkerApp) AddFlags() {
 
 func (app *bridgeMarkerApp) Run() {
 	logger := log.DefaultLogger()
-	bridgeDevices, err := plugin.GetBridgeDevicePlugins(app.maxDevices)	
+	bridgeDevices, err := plugin.GetBridgeDevicePlugins(app.maxDevices)
 	if err != nil {
 		logger.Errorf("bridge-marker couldn't start: %v", err)
 		panic(err)
 	}
 
 	bridgeDeviceController := plugin.NewBridgeDeviceController(bridgeDevices)
-	
+
 	go bridgeDeviceController.Run(app.stop)
 
-	<- app.stop
+	<-app.stop
 }
 
 func main() {
 	app := &bridgeMarkerApp{
-		stop: make(chan struct{}),
+		stop:    make(chan struct{}),
 		backoff: defaultBackoffTime,
 	}
 	app.AddFlags()

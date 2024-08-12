@@ -1,0 +1,58 @@
+---
+{{- $daemonsetName := printf "%s" (include "bridge-marker.fullname" .) | trunc 63 | trimSuffix "-" }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ $daemonsetName }}
+  namespace: {{ include "bridge-marker.namespace" . }}
+  labels:
+    {{- include "bridge-marker.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "bridge-marker.selectorLabels" . | nindent 6 }}
+  {{- with .Values.updateStrategy }}
+  updateStrategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "bridge-marker.templateLabels" . | nindent 8 }}
+    spec:
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
+      {{- if .Values.runtimeClassName }}
+      runtimeClassName: {{ .Values.runtimeClassName }}
+      {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - image: {{ include "bridge-marker.fullimage" . }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        name: bridge-marker-device-plugin
+        securityContext:
+          {{- include "bridge-marker.securityContext" . | nindent 10 }}
+        volumeMounts:
+          - name: device-plugin
+            mountPath: /var/lib/kubelet/device-plugins
+        {{- with .Values.resources }}
+        resources:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+      volumes:
+        - name: device-plugin
+          hostPath:
+            path: /var/lib/kubelet/device-plugins
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
