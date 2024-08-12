@@ -8,7 +8,7 @@ allowDefaultNamespace: false
 imagePullSecrets: []
 image:
   repository: "registry:5000/bridge-marker"
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
   tag: "latest"
 
 updateStrategy:

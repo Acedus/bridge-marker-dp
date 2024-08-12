@@ -48,7 +48,7 @@ docker-push:
 	# $(OCI_BIN) tag ${REGISTRY}/bridge-marker:${IMAGE_TAG} ${REGISTRY}/bridge-marker:${IMAGE_GIT_TAG}
 	# $(OCI_BIN) push ${TLS_SETTING} ${REGISTRY}/bridge-marker:${IMAGE_GIT_TAG}
 
-cluster-sync: build
+cluster-sync:
 	./cluster/sync.sh
 
 vendor: $(GO)
