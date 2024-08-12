@@ -2,12 +2,11 @@ package plugin
 
 import (
 	"math"
-	"os"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 
 	"kubevirt.io/client-go/log"
 )
@@ -101,12 +100,16 @@ type BridgeDeviceController struct {
 	permanentPlugins    map[string]Device
 	startedPlugins      map[string]controlledDevice
 	startedPluginsMutex sync.Mutex
+	newPlugins	    chan Device
+	maxDevices	    int
 	backoff             []time.Duration
+	refreshInterval     time.Duration
 	stop                chan struct{}
 }
 
 func NewBridgeDeviceController(
 	permanentPlugins []Device,
+	maxDevices int,
 ) *BridgeDeviceController {
 
 	permanentPluginsMap := make(map[string]Device, len(permanentPlugins))
@@ -117,25 +120,12 @@ func NewBridgeDeviceController(
 	controller := &BridgeDeviceController{
 		permanentPlugins: permanentPluginsMap,
 		startedPlugins:   map[string]controlledDevice{},
+		newPlugins:	  make(chan Device),
 		backoff:          defaultBackoffTime,
+		maxDevices: maxDevices,
 	}
 
 	return controller
-}
-
-func (c *BridgeDeviceController) NodeHasDevice(devicePath string) bool {
-	_, err := os.Stat(devicePath)
-	// Since this is a boolean question, any error means "no"
-	return (err == nil)
-}
-
-func removeSelectorSpaces(selectorName string) string {
-	// The name usually contain spaces which should be replaced with _
-	// Such as GRID T4-1Q
-	typeNameStr := strings.Replace(string(selectorName), " ", "_", -1)
-	typeNameStr = strings.TrimSpace(typeNameStr)
-	return typeNameStr
-
 }
 
 func (c *BridgeDeviceController) startDevice(resourceName string, dev Device) {
@@ -146,6 +136,7 @@ func (c *BridgeDeviceController) startDevice(resourceName string, dev Device) {
 	}
 	controlledDev.Start()
 	c.startedPlugins[resourceName] = controlledDev
+	
 }
 
 func (c *BridgeDeviceController) stopDevice(resourceName string) {
@@ -160,27 +151,45 @@ func (c *BridgeDeviceController) Run(stop chan struct{}) error {
 	logger := log.DefaultLogger()
 
 	// start the permanent DevicePlugins
-	func() {
-		c.startedPluginsMutex.Lock()
-		defer c.startedPluginsMutex.Unlock()
-		for name, dev := range c.permanentPlugins {
-			c.startDevice(name, dev)
-		}
-	}()
+	c.startPermanentPlugins()
 
-	// keep running until stop
-	<-stop
+	// Scan for new devices and adds them as they become available
+	go c.ScanForNewDevices(stop)
 
-	// stop all device plugins
-	func() {
-		c.startedPluginsMutex.Lock()
-		defer c.startedPluginsMutex.Unlock()
-		for name := range c.startedPlugins {
-			c.stopDevice(name)
+	for {
+		select {
+		case device := <-c.newPlugins:
+			c.startNewPlugin(device)
+		// keep running until stop
+		case <-stop:
+			logger.Info("Shutting down device plugin controller")
+			c.stopAllPlugins()
+			return nil
 		}
-	}()
-	logger.Info("Shutting down device plugin controller")
-	return nil
+	}
+
+}
+
+func (c *BridgeDeviceController) startPermanentPlugins() {
+	c.startedPluginsMutex.Lock()
+	defer c.startedPluginsMutex.Unlock()
+	for name, dev := range c.permanentPlugins {
+		c.startDevice(name, dev)
+	}
+}
+
+func (c *BridgeDeviceController) stopAllPlugins() {
+	c.startedPluginsMutex.Lock()
+	defer c.startedPluginsMutex.Unlock()
+	for name := range c.startedPlugins {
+		c.stopDevice(name)
+	}
+}
+
+func (c *BridgeDeviceController) startNewPlugin(device Device) {
+	c.startedPluginsMutex.Lock()
+	defer c.startedPluginsMutex.Unlock()
+	c.startDevice(device.GetDeviceName(), device)
 }
 
 func (c *BridgeDeviceController) Initialized() bool {
@@ -193,4 +202,28 @@ func (c *BridgeDeviceController) Initialized() bool {
 	}
 
 	return true
+}
+
+func (c *BridgeDeviceController) ScanForNewDevices(stop chan struct{}) {
+	defer close(c.newPlugins)
+	logger := log.DefaultLogger()
+	updates := make(chan netlink.LinkUpdate) 
+	if err := netlink.LinkSubscribe(updates, stop); err != nil {
+		logger.Reason(err).Criticalf("Could not subscribe to link updates, stopping device plugin.")
+		close(stop)
+		return
+	}
+
+	for {
+		select {
+		case update := <-updates:
+			link := update.Link
+			if bridge, ok := link.(*netlink.Bridge); ok && update.Header.Type == unix.RTM_NEWLINK {
+				c.newPlugins <- NewBridgeDevicePlugin(bridge.Name, c.maxDevices)
+			}
+		case <-stop:
+			logger.Info("Stop scanning for new devices due to stop signal")
+			return
+		}
+	}
 }

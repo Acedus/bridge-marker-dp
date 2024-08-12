@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	// THe Linux kernel has a default hardcoded parameter BR_PORT_BITS = 10.
+	// The Linux kernel has a default hardcoded parameter BR_PORT_BITS = 10.
 	// This means that the maximum number of ports allowed on a bridge is 1024 (2^10 = 1024).
 	maxDevices = 1024
 )
@@ -47,7 +47,7 @@ func (app *bridgeMarkerApp) Run() {
 		logger.Warning("no bridge devices found on node.")
 	}
 
-	bridgeDeviceController := plugin.NewBridgeDeviceController(bridgeDevices)
+	bridgeDeviceController := plugin.NewBridgeDeviceController(bridgeDevices, app.maxDevices)
 
 	go bridgeDeviceController.Run(app.stop)
 
