@@ -43,6 +43,10 @@ func (app *bridgeMarkerApp) Run() {
 		panic(err)
 	}
 
+	if len(bridgeDevices) == 0 {
+		logger.Warning("no bridge devices found on node.")
+	}
+
 	bridgeDeviceController := plugin.NewBridgeDeviceController(bridgeDevices)
 
 	go bridgeDeviceController.Run(app.stop)
