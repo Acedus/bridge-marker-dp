@@ -31,6 +31,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      hostNetwork: true
       containers:
       - image: {{ include "bridge-marker.fullimage" . }}
         imagePullPolicy: {{ .Values.image.pullPolicy }}
