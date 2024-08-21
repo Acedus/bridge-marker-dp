@@ -57,6 +57,7 @@ func gRPCConnect(socketPath string, timeout time.Duration) (*grpc.ClientConn, er
 		}
 
 		if !conn.WaitForStateChange(ctx, state) {
+			conn.Close()
 			return nil, fmt.Errorf("Failed dial context at %s: %v", socketPath, ctx.Err())
 		}
 	}
